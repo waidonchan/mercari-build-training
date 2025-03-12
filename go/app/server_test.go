@@ -6,10 +6,27 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"os"
+	"bytes"
+	"mime/multipart"
 
 	"github.com/google/go-cmp/cmp"
 	"go.uber.org/mock/gomock"
 )
+
+var testImageData []byte
+
+func TestMain(m *testing.M) {
+	// 画像データのモックをセットアップ
+	var err error
+	testImageData, err = os.ReadFile("../images/default.jpg")
+	if err != nil {
+		testImageData = []byte("test image data")
+	}
+
+	os.Exit(m.Run())
+}
+
 
 func TestParseAddItemRequest(t *testing.T) {
 	t.Parallel()
@@ -19,26 +36,48 @@ func TestParseAddItemRequest(t *testing.T) {
 		err bool
 	}
 
+	// ✅ 画像データのモックを用意
+	testImageData, err := os.ReadFile("../images/default.jpg")
+	if err != nil {
+		testImageData = []byte("test image data")
+	}
+
 	// STEP 6-1: define test cases
 	cases := map[string]struct {
-		args map[string]string
+		args 	  map[string]string
+		imageData []byte
 		wants
 	}{
 		"ok: valid request": {
 			args: map[string]string{
-				"name":     "", // fill here
-				"category": "", // fill here
+				"name":     "jacket", // fill here
+				"category": "fashion", // fill here
 			},
+			imageData: testImageData,
 			wants: wants{
 				req: &AddItemRequest{
-					Name: "", // fill here
-					// Category: "", // fill here
+					Name: "jacket", // fill here
+					Category: "fashion", // fill here
+					Image: testImageData,
 				},
 				err: false,
 			},
 		},
-		"ng: empty request": {
-			args: map[string]string{},
+		"ng: missing name": {
+			args: map[string]string{
+				"category": "fashion",
+			},
+			imageData: testImageData,
+			wants: wants{
+				req: nil,
+				err: true,
+			},
+		},
+		"ng: missing category": {
+			args: map[string]string{
+				"name": "jacket",
+			},
+			imageData: testImageData,
 			wants: wants{
 				req: nil,
 				err: true,
@@ -49,23 +88,15 @@ func TestParseAddItemRequest(t *testing.T) {
 	for name, tt := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-
-			// prepare request body
-			values := url.Values{}
-			for k, v := range tt.args {
-				values.Set(k, v)
-			}
-
-			// prepare HTTP request
-			req, err := http.NewRequest("POST", "http://localhost:9000/items", strings.NewReader(values.Encode()))
+	
+			req, err := createMultipartRequest("http://localhost:9000/items", tt.args, tt.imageData)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
+	
 			// execute test target
 			got, err := parseAddItemRequest(req)
-
+	
 			// confirm the result
 			if err != nil {
 				if !tt.err {
@@ -79,6 +110,64 @@ func TestParseAddItemRequest(t *testing.T) {
 		})
 	}
 }
+
+func createMultipartRequest(url string, params map[string]string, imageData []byte) (*http.Request, error) {
+    body := &bytes.Buffer{}
+    writer := multipart.NewWriter(body)
+
+    // 文字データの追加
+    for key, value := range params {
+        _ = writer.WriteField(key, value)
+    }
+
+    // 画像データの追加
+    filePart, err := writer.CreateFormFile("image", "default.jpg")
+    if err != nil {
+        return nil, err
+    }
+    _, err = filePart.Write(imageData)
+    if err != nil {
+        return nil, err
+    }
+
+    writer.Close()
+
+    req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType()) // Content-Type を設定
+
+    return req, nil
+}
+
+
+func parseAddItemRequest(req *http.Request) (*AddItemRequest, error) {
+    err := req.ParseMultipartForm(10 << 20) // 10MB
+    if err != nil {
+        return nil, fmt.Errorf("failed to parse multipart form: %w", err)
+    }
+
+    name := req.FormValue("name")
+    category := req.FormValue("category")
+    file, _, err := req.FormFile("image")
+    if err != nil {
+        return nil, fmt.Errorf("image is required")
+    }
+    defer file.Close()
+
+    imageData, err := io.ReadAll(file)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read image data: %w", err)
+    }
+
+    return &AddItemRequest{
+        Name:     name,
+        Category: category,
+        Image:    imageData,
+    }, nil
+}
+
 
 func TestHelloHandler(t *testing.T) {
 	t.Parallel()
@@ -125,9 +214,34 @@ func TestAddItem(t *testing.T) {
 			injector: func(m *MockItemRepository) {
 				// STEP 6-3: define mock expectation
 				// succeeded to insert
+				m.EXPECT().Insert(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			wants: wants{
 				code: http.StatusOK,
+			},
+		},
+		"ng: failed to name": {
+			args: map[string]string{
+				"category": "phone",
+			},
+			injector: func(m *MockItemRepository) {
+				// STEP 6-3: define mock expectation
+				// failed to insert
+			},
+			wants: wants{
+				code: http.StatusInternalServerError,
+			},
+		},
+		"ng: failed to category": {
+			args: map[string]string{
+				"name": "used iPhone 16e",
+			},
+			injector: func(m *MockItemRepository) {
+				// STEP 6-3: define mock expectation
+				// failed to insert
+			},
+			wants: wants{
+				code: http.StatusInternalServerError,
 			},
 		},
 		"ng: failed to insert": {
@@ -136,8 +250,8 @@ func TestAddItem(t *testing.T) {
 				"category": "phone",
 			},
 			injector: func(m *MockItemRepository) {
-				// STEP 6-3: define mock expectation
-				// failed to insert
+				// ✅ Insert が失敗するモックを設定
+				m.EXPECT().Insert(gomock.Any(), gomock.Any()).Return(errItemNotFound)
 			},
 			wants: wants{
 				code: http.StatusInternalServerError,
@@ -150,17 +264,26 @@ func TestAddItem(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
 			mockIR := NewMockItemRepository(ctrl)
 			tt.injector(mockIR)
 			h := &Handlers{itemRepo: mockIR}
 
+			// テストケース内で使用する
+			req, err := createMultipartRequest("/items", tt.args, testImageData)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+
 			values := url.Values{}
 			for k, v := range tt.args {
 				values.Set(k, v)
 			}
-			req := httptest.NewRequest("POST", "/items", strings.NewReader(values.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req, err = createMultipartRequest("/items", tt.args, testImageData)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
 
 			rr := httptest.NewRecorder()
 			h.AddItem(rr, req)
