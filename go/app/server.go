@@ -47,8 +47,8 @@ func (s Server) Run() int {
 	}
 
 	// set up handlers
-	itemRepo := NewItemRepository(db)
-	h := &Handlers{imgDirPath: s.ImageDirPath, itemRepo: itemRepo}
+	ItemRepo := NewItemRepository(db)
+	h := &Handlers{ImgDirPath: s.ImageDirPath, ItemRepo: ItemRepo}
 
 	// set up routes
 	mux := http.NewServeMux()
@@ -72,9 +72,9 @@ func (s Server) Run() int {
 }
 
 type Handlers struct {
-	// imgDirPath is the path to the directory storing images.
-	imgDirPath string
-	itemRepo   ItemRepository
+	// ImgDirPath is the path to the directory storing images.
+	ImgDirPath string
+	ItemRepo   ItemRepository
 }
 
 type HelloResponse struct {
@@ -90,7 +90,7 @@ func (s *Handlers) Hello(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetItems(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// `items` テーブルと `categories` テーブルを `JOIN` してデータを取得
-	items, err := h.itemRepo.List(ctx)
+	items, err := h.ItemRepo.List(ctx)
 	if err != nil {
 		http.Error(w, "failed to get items", http.StatusInternalServerError)
 		return
@@ -116,7 +116,7 @@ func (s *Handlers) GetItem(w http.ResponseWriter, r *http.Request) {
 
 	// リポジトリからIdを使って商品をselectする
 	// Listに対してselectを作る
-	item, err := s.itemRepo.Select(ctx, id)
+	item, err := s.ItemRepo.Select(ctx, id)
 	if err != nil {
 		if errors.Is(err, errItemNotFound) {
 			http.Error(w, "Item not found", http.StatusNotFound)
@@ -138,8 +138,8 @@ type AddItemRequest struct {
 	Image    []byte `form:"image"`    // STEP 4-4: add an image field  受け取った画像ファイルを構造体にそのまま載せる
 }
 
-// parseAddItemRequest parses and validates the request to add an item.
-func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
+// ParseAddItemRequest parses and validates the request to add an item.
+func ParseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 	req := &AddItemRequest{
 		Name: r.FormValue("name"),
 		// STEP 4-2: add a category field
@@ -168,7 +168,7 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	slog.Info("Received request to add item")
 
-	req, err := parseAddItemRequest(r) // リクエストが来た時にAddItemRequestにリクエストの中身を入れて返す
+	req, err := ParseAddItemRequest(r) // リクエストが来た時にAddItemRequestにリクエストの中身を入れて返す
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -194,7 +194,7 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 	// STEP 4-2: add an implementation to store an image
 	// 受け取ったリクエストをサーバーのリポジトリ(何かを保管する場所)に保存する
 	// DBにデータを追加
-	err = s.itemRepo.Insert(ctx, item)
+	err = s.ItemRepo.Insert(ctx, item)
 	if err != nil {
 		slog.Error("failed to store item", "error", err)
 		http.Error(w, fmt.Sprintf("failed to store item: %s", err.Error()), http.StatusInternalServerError)
@@ -226,7 +226,7 @@ func (s *Handlers) storeImage(image []byte) (string, error) {
 	// - build image file path
 	// ハッシュの文字列からファイルパスを作る
 	fileName := fmt.Sprintf("%s.jpg", hashStr)
-	imgPath := filepath.Join(s.imgDirPath, fileName)
+	imgPath := filepath.Join(s.ImgDirPath, fileName)
 
 	// - check if the image already exists
 	// 画像がすでにある場合のハンドリング
@@ -247,11 +247,11 @@ func (s *Handlers) storeImage(image []byte) (string, error) {
 // If the specified image is not found, it returns the default image.
 func (s *Handlers) GetImage(w http.ResponseWriter, r *http.Request) {
 	fileName := r.PathValue("filename")
-	imgPath := filepath.Join(s.imgDirPath, fileName)
+	imgPath := filepath.Join(s.ImgDirPath, fileName)
 
 	// when the image is not found, it returns the default image without an error.
 	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		imgPath = filepath.Join(s.imgDirPath, "default.jpg")
+		imgPath = filepath.Join(s.ImgDirPath, "default.jpg")
 	}
 
 	http.ServeFile(w, r, imgPath)
@@ -269,7 +269,7 @@ func (h *Handlers) SearchItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// リポジトリで検索
-	items, err := h.itemRepo.Search(ctx, keyword)
+	items, err := h.ItemRepo.Search(ctx, keyword)
 	if err != nil {
 		http.Error(w, "failed to search items", http.StatusInternalServerError)
 		return
