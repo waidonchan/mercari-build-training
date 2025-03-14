@@ -15,7 +15,7 @@ COPY . .
 RUN CGO_ENABLED=1 go build -o myapp cmd/api/main.go
 
 RUN addgroup -S mercari && adduser -S trainee -G mercari
-RUN chown -R trainee:mercari db
+RUN chown -R trainee:mercari db images
 
 USER trainee
 
