@@ -207,7 +207,7 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 	// JSONレスポンスを返す
 	resp := map[string]interface{}{
 		"id":      item.ID,
-		"message": "item received: " + item.Name,
+		"message": "item received: " + item.Name, // curlコマンドのPOSTで返って実行結果を増やしたいのであればここで付け足す
 	}
 	json.NewEncoder(w).Encode(resp)
 }
