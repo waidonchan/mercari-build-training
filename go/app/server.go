@@ -179,7 +179,8 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 	// Insertでまとめて画像も保存できるようにする
 	fileName, err := s.storeImage(req.Image) //画像を保存する処理
 	if err != nil {
-		http.Error(w, "failed to store image: ", http.StatusInternalServerError)
+		slog.Error("failed to store image: ", "error", err)
+		http.Error(w, fmt.Sprintf("failed to store image: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
