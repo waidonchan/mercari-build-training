@@ -188,7 +188,7 @@ func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 	if !validMimeTypes[contentType] {
 		return nil, fmt.Errorf("invalid image format (must be JPEG or PNG, got %s)", contentType)
 	}
-	
+
 	req.Image = imageData
 	return req, nil
 }
@@ -215,12 +215,26 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 🌟 追加：カテゴリID取得処理（なければ作る）
+	category, err := s.itemRepo.GetCategoryByName(ctx, req.Category)
+	if err != nil {
+		// カテゴリが存在しない場合、新しく追加
+		slog.Warn("Category not found, creating new category", "category", req.Category)
+		category, err = s.itemRepo.InsertCategory(ctx, req.Category)
+		if err != nil {
+			slog.Error("Failed to create category", "category", req.Category, "error", err)
+			http.Error(w, "Failed to create category", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	item := &Item{
 		Name: req.Name,
 		// STEP 4-2: add a category field
 		Category: req.Category,
 		// STEP 4-4: add an image field
-		ImageName: fileName,
+		ImageName:  fileName,
+		CategoryID: category.ID,
 	}
 
 	// STEP 4-2: add an implementation to store an image

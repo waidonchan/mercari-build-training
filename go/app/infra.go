@@ -34,10 +34,11 @@ type Category struct {
 
 // アイテム構造体
 type Item struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	Category  string `json:"category"`
-	ImageName string `json:"image_name"`
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	ImageName  string `json:"image_name"`
+	CategoryID int    `json:"-"`
 }
 
 // Please run `go generate ./...` to generate the mock implementation

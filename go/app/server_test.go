@@ -3,18 +3,18 @@ package app
 import (
 	"bytes"
 	"database/sql"
-	"fmt"
-	"path/filepath"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/golang/mock/gomock"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
@@ -39,27 +39,27 @@ func TestParseAddItemRequest(t *testing.T) {
 	longString := strings.Repeat("a", 256)
 
 	cases := map[string]struct {
-		args map[string]string
+		args      map[string]string
 		imageData []byte
 		wants
 	}{
 		"ok: valid request": {
 			args: map[string]string{
-				"name":     "jacket", // fill here
+				"name":     "jacket",  // fill here
 				"category": "fashion", // fill here
 			},
-			imageData:dummyImageData,
+			imageData: dummyImageData,
 			wants: wants{
 				req: &AddItemRequest{
-					Name: "jacket", // fill here
+					Name:     "jacket",  // fill here
 					Category: "fashion", // fill here
-					Image: dummyImageData,
+					Image:    dummyImageData,
 				},
 				err: false,
 			},
 		},
 		"ng: empty request": {
-			args: map[string]string{},
+			args:      map[string]string{},
 			imageData: nil,
 			wants: wants{
 				req: nil,
@@ -78,7 +78,7 @@ func TestParseAddItemRequest(t *testing.T) {
 		},
 		"ng: missing category": {
 			args: map[string]string{
-				"name":  "jacket",
+				"name": "jacket",
 			},
 			imageData: dummyImageData,
 			wants: wants{
@@ -220,8 +220,8 @@ func TestHelloHandler(t *testing.T) {
 	// Please comment out for STEP 6-2
 	// predefine what we want
 	type wants struct {
-	 	code int               // desired HTTP status code
-	 	body map[string]string // desired body
+		code int               // desired HTTP status code
+		body map[string]string // desired body
 	}
 	want := wants{
 		code: http.StatusOK,
@@ -262,7 +262,7 @@ func TestAddItem(t *testing.T) {
 		body string
 	}
 	cases := map[string]struct {
-		args     map[string]string
+		args       map[string]string
 		imageData  []byte
 		setupMocks func(m *MockItemRepository)
 		wants
@@ -274,19 +274,20 @@ func TestAddItem(t *testing.T) {
 			},
 			imageData: dummyImageData,
 			setupMocks: func(m *MockItemRepository) {
-				// succeeded to insert with new category
-				// カテゴリが存在しない場合
-				m.EXPECT().GetCategoryByName(gomock.Any(), "phone").Return(nil, errors.New("category not found"))
-				// 新しいカテゴリを作成
-				m.EXPECT().InsertCategory(gomock.Any(), "phone").Return(&Category{ID: 1, Name: "phone"}, nil)
-				// アイテム挿入成功 - 任意の引数を許容
-				m.EXPECT().Insert(gomock.Any(), gomock.Any()).Return(nil)
+				// カテゴリが見つからなかったら、新しいカテゴリを作成し、その後 Insert を呼び出す
+				m.EXPECT().GetCategoryByName(gomock.Any(), gomock.Eq("phone")).
+					Return(nil, errors.New("category not found"))
+				m.EXPECT().InsertCategory(gomock.Any(), "phone").
+					Return(&Category{ID: 1, Name: "phone"}, nil)
+				m.EXPECT().Insert(gomock.Any(), gomock.Any()).
+					Return(nil)
 			},
 			wants: wants{
 				code: http.StatusOK,
 				body: "item received: used iPhone 16",
 			},
 		},
+
 		"ok: correctly insert item with existing category": {
 			args: map[string]string{
 				"name":     "MacBook Pro",
@@ -296,7 +297,7 @@ func TestAddItem(t *testing.T) {
 			setupMocks: func(m *MockItemRepository) {
 				// succeeded to insert with existing category
 				// カテゴリが既に存在する場合
-				m.EXPECT().GetCategoryByName(gomock.Any(), "laptop").Return(&Category{ID: 2, Name: "laptop"}, nil)
+				m.EXPECT().GetCategoryByName(gomock.Any(), gomock.Eq("laptop")).Return(&Category{ID: 2, Name: "laptop"}, nil)
 				// アイテム挿入成功 - 任意の引数を許容
 				m.EXPECT().Insert(gomock.Any(), gomock.Any()).Return(nil)
 			},
@@ -313,7 +314,7 @@ func TestAddItem(t *testing.T) {
 			imageData: dummyImageData,
 			setupMocks: func(m *MockItemRepository) {
 				// カテゴリ取得失敗（データベースエラー）
-				m.EXPECT().GetCategoryByName(gomock.Any(), "tablet").Return(nil, errors.New("database error"))
+				m.EXPECT().GetCategoryByName(gomock.Any(), gomock.Eq("tablet")).Return(nil, errors.New("database error"))
 				// 新しいカテゴリを作成しようとして失敗
 				m.EXPECT().InsertCategory(gomock.Any(), "tablet").Return(nil, errors.New("failed to create category"))
 				// この場合はInsertは呼ばれないので期待しない
@@ -331,11 +332,11 @@ func TestAddItem(t *testing.T) {
 			imageData: dummyImageData,
 			setupMocks: func(m *MockItemRepository) {
 				// カテゴリは正常に取得
-				m.EXPECT().GetCategoryByName(gomock.Any(), "phone").Return(&Category{ID: 3, Name: "phone"}, nil)
+				m.EXPECT().GetCategoryByName(gomock.Any(), gomock.Eq("phone")).Return(&Category{ID: 3, Name: "phone"}, nil)
 				// アイテム挿入失敗
 				m.EXPECT().Insert(gomock.Any(), gomock.Any()).Return(errors.New("failed to insert item"))
 			},
-				wants: wants{
+			wants: wants{
 				code: http.StatusInternalServerError,
 				body: "failed to insert item",
 			},
@@ -364,7 +365,9 @@ func TestAddItem(t *testing.T) {
 
 			// モックリポジトリの作成と設定
 			mockRepo := NewMockItemRepository(ctrl)
-			tt.setupMocks(mockRepo)
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockRepo)
+			}
 
 			// テスト対象のハンドラーを作成
 			h := &Handlers{
