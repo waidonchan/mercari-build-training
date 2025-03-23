@@ -128,6 +128,18 @@ n 個の整数からなる配列 nums が与えられ、nums[i] は [1, n] の�
 - 解説で扱う予定なので、挑戦してみてください
 </details>
 
+### 実行コード
+
+```python
+class Solution:
+    def findDisappearedNumbers(self, nums: List[int]) -> List[int]:
+        result = []
+        for i in range(1, len(nums)+1): # numsの長さ分だけ回す
+            if i not in nums:
+                result.append(i)
+        return result
+```
+
 ### [Intersection of Two Linked Lists](https://leetcode.com/problems/intersection-of-two-linked-lists/description)
 
 2 つの単方向 Linked List が与えられるので、2 つのリストが交差するノードを返してください。交差しない場合は、`null` を返してください。
@@ -152,6 +164,88 @@ n 個の整数からなる配列 nums が与えられ、nums[i] は [1, n] の�
 - 2 つのリストの長さを比較して、長いリストを短いリストと同じ長さにすることで、O(n)-time and O(1)-space で解けます
 - 解説で扱う予定です
 </details>
+
+### 実行コード
+
+```python
+class Solution:
+    def getIntersectionNode(self, headA: ListNode, headB: ListNode) -> Optional[ListNode]:
+        def getLength(head):
+            length = 0
+            while head:
+                length += 1
+                head = head.next
+            return length
+
+        lenA = getLength(headA)
+        lenB = getLength(headB)
+
+        # ポインタをセット
+        currA = headA
+        currB = headB
+
+        # 長い方を進めて長さを合わせる
+        if lenA > lenB:
+            for _ in range(lenA - lenB):
+                currA = currA.next
+        else:
+            for _ in range(lenB - lenA):
+                currB = currB.next
+
+        # 同時に進めて一致するノードを探す
+        while currA and currB:
+            if currA == currB:
+                return currA
+            currA = currA.next
+            currB = currB.next
+
+        return None
+```
+
+```python
+class Solution:
+    def getIntersectionNode(self, headA: ListNode, headB: ListNode) -> Optional[ListNode]:
+        # 2つのポインタを使う
+        pA = headA
+        pB = headB
+
+        # 2つのポインタが一致するまで繰り返す
+        while pA != pB:
+            # それぞれのポインタが終端に達したら、もう一方のリストの先頭に移動
+            pA = pA.next if pA else headB
+            pB = pB.next if pB else headA
+
+        # 一致したノード（またはNone）を返す
+        return pA
+```
+
+```python
+class Solution:
+    def getIntersectionNode(self, headA: ListNode, headB: ListNode) -> Optional[ListNode]:
+        # ポインタAとポインタBを、それぞれのリストの先頭にセットする
+        pointerA = headA
+        pointerB = headB
+
+        # ポインタAとポインタBが同じノードを指すまでループする
+        while pointerA != pointerB:
+            # ポインタAがNoneでなければ次のノードに進む
+            if pointerA is not None:
+                pointerA = pointerA.next
+            else:
+                # ポインタAがNoneになったら、Bの先頭に切り替える
+                pointerA = headB
+
+            # ポインタBがNoneでなければ次のノードに進む
+            if pointerB is not None:
+                pointerB = pointerB.next
+            else:
+                # ポインタBがNoneになったら、Aの先頭に切り替える
+                pointerB = headA
+
+        # 最後に一致したノード（またはNone）を返す
+        return pointerA
+
+```
 
 #### 発展: two pointers を使って解く方法 (おまけ)
 
