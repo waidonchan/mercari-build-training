@@ -34,10 +34,11 @@ type Category struct {
 
 // アイテム構造体
 type Item struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	Category  string `json:"category"`
-	ImageName string `json:"image_name"`
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	Category   string `json:"category"`
+	ImageName  string `json:"image_name"`
+	CategoryID int    `json:"-"`
 }
 
 // Please run `go generate ./...` to generate the mock implementation
@@ -49,6 +50,27 @@ type ItemRepository interface {
 	List(ctx context.Context) ([]*Item, error)
 	Select(ctx context.Context, id int) (*Item, error) // リポジトリのinterfaceにselectを追加
 	Search(ctx context.Context, keyword string) ([]*Item, error)
+	GetCategories(ctx context.Context) ([]Category, error)
+	GetCategoryByName(ctx context.Context, name string) (*Category, error)
+	InsertCategory(ctx context.Context, name string) (*Category, error)
+}
+
+// InsertCategory inserts a new category into the repository.
+func (r *itemRepository) InsertCategory(ctx context.Context, name string) (*Category, error) {
+	// カテゴリを追加するSQLクエリ
+	query := `INSERT INTO categories (name) VALUES (?) RETURNING id`
+	result, err := r.db.ExecContext(ctx, query, name)
+	if err != nil {
+		return nil, fmt.Errorf("insert category failed: %w", err)
+	}
+
+	// 挿入したカテゴリのIDを取得
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("retrieve last insert ID failed: %w", err)
+	}
+
+	return &Category{ID: int(id), Name: name}, nil
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -148,6 +170,41 @@ func (i *itemRepository) List(ctx context.Context) ([]*Item, error) {
 	}
 
 	return items, nil
+}
+
+// GetCategories retrieves all categories
+func (r *itemRepository) GetCategories(ctx context.Context) ([]Category, error) {
+	query := `SELECT id, name FROM categories`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("retrieve categories failed: %w", err)
+	}
+	defer rows.Close()
+
+	var categories []Category
+	for rows.Next() {
+		var category Category
+		if err := rows.Scan(&category.ID, &category.Name); err != nil {
+			return nil, fmt.Errorf("scan category failed: %w", err)
+		}
+		categories = append(categories, category)
+	}
+	return categories, nil
+}
+
+// GetCategoryByName retrieves a category by name
+func (r *itemRepository) GetCategoryByName(ctx context.Context, name string) (*Category, error) {
+	query := `SELECT id, name FROM categories WHERE name = ?`
+	row := r.db.QueryRowContext(ctx, query, name)
+
+	var category Category
+	if err := row.Scan(&category.ID, &category.Name); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("category with name %s not found", name)
+		}
+		return nil, fmt.Errorf("retrieve category failed: %w", err)
+	}
+	return &category, nil
 }
 
 // 5-1selectの実装

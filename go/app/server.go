@@ -146,6 +146,20 @@ func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 		Category: r.FormValue("category"),
 	}
 
+	if req.Name == "" {
+		return nil, errors.New("name is required")
+	}
+	if len(req.Name) > 255 {
+		return nil, errors.New("name is too long (max 255 chars)")
+	}
+
+	if req.Category == "" {
+		return nil, errors.New("category is required")
+	}
+	if len(req.Category) > 255 {
+		return nil, errors.New("category is too long (max 255 chars)")
+	}
+
 	// STEP 4-4: add an image field
 	// リクエストで受け取った画像がFormFile("image")に入る
 	uploadedFile, _, err := r.FormFile("image")
@@ -158,6 +172,23 @@ func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
+
+	// **空の画像データのチェック**
+	if len(imageData) == 0 {
+		return nil, errors.New("image file is empty")
+	}
+
+	// **MIMEタイプを `http.DetectContentType` で取得**
+	contentType := http.DetectContentType(imageData[:512]) // 最初の 512 バイトから MIME を判定
+	validMimeTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+	}
+
+	if !validMimeTypes[contentType] {
+		return nil, fmt.Errorf("invalid image format (must be JPEG or PNG, got %s)", contentType)
+	}
+
 	req.Image = imageData
 	return req, nil
 }
@@ -184,12 +215,26 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 🌟 追加：カテゴリID取得処理（なければ作る）
+	category, err := s.itemRepo.GetCategoryByName(ctx, req.Category)
+	if err != nil {
+		// カテゴリが存在しない場合、新しく追加
+		slog.Warn("Category not found, creating new category", "category", req.Category)
+		category, err = s.itemRepo.InsertCategory(ctx, req.Category)
+		if err != nil {
+			slog.Error("Failed to create category", "category", req.Category, "error", err)
+			http.Error(w, "Failed to create category", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	item := &Item{
 		Name: req.Name,
 		// STEP 4-2: add a category field
 		Category: req.Category,
 		// STEP 4-4: add an image field
-		ImageName: fileName,
+		ImageName:  fileName,
+		CategoryID: category.ID,
 	}
 
 	// STEP 4-2: add an implementation to store an image
